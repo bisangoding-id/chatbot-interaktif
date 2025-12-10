@@ -1,26 +1,19 @@
 <?php
 
-// ===============================
-// KONFIGURASI
-// ===============================
-$API_KEY = "**"; 
+//Terima data dari API
+$input = json_decode(file_get_contents("php://input"), true);
 
-$MENU =
-"1. Ketersediaan kamar\n".
-"2. Harga\n".
-"3. Fasilitas\n".
-"4. Lokasi\n".
-"5. Foto kamar\n".
-"6. Cara Reservasi";
+$from = $input["sender"] ?? "";
+$text = strtolower(trim($input["message"] ?? ""));
+$name = $input["name"] ?? "customer";
+
+if (!$input){ echo "No Data"; exit; }
 
 
-// FUNGSI REPLY 
+//Fungsi balas pesan
+$API_KEY = "6RtjpBVYHSwFTCrBHxs7"; //Sesuaikan token API nya
 
-function reply($to, $msg, $API_KEY, $addFooter = true){
-
-    if ($addFooter) {
-        $msg .= "\n\n_Ketik *0* untuk informasi lainnya_ ✨";
-    }
+function reply($to, $msg, $API_KEY){
 
     $ch = curl_init("https://api.fonnte.com/send");
     curl_setopt_array($ch, [
@@ -36,23 +29,7 @@ function reply($to, $msg, $API_KEY, $addFooter = true){
     curl_close($ch);
 }
 
-
-// ===============================
-// INPUT WEBHOOK
-// ===============================
-$input = json_decode(file_get_contents("php://input"), true);
-file_put_contents("debug.json", json_encode($input, JSON_PRETTY_PRINT) . "\n\n", FILE_APPEND);
-
-if (!$input){ echo "OK"; exit; }
-
-$from = $input["sender"] ?? "";
-$text = strtolower(trim($input["message"] ?? ""));
-$name = $input["name"] ?? "Kak";
-
-
-// ===============================
-// STATE SYSTEM
-// ===============================
+//Ambil state percakapan dari file JSON
 $state_file = "state.json";
 $state = file_exists($state_file)
     ? json_decode(file_get_contents($state_file), true)
@@ -64,49 +41,41 @@ if (!isset($state[$from])) {
 
 $step = $state[$from]["step"];
 
+//LOGIKA PROSES PERCAKAPAN
 
-// ===============================
-// 0️⃣ USER MINTA MENU (NO FOOTER)
-// ===============================
-if ($text === "0") {
-    reply($from, "Silakan pilih informasi berikut (bisa ketik nomornya aja) :\n\n$MENU", $API_KEY, false);
-    $state[$from]["step"] = "menu";
-}
+$MENU =
+"1. Ketersediaan kamar\n".
+"2. Harga\n".
+"3. Fasilitas\n".
+"4. Lokasi\n".
+"5. Foto kamar\n".
+"6. Cara Reservasi";
 
 
-// ===============================
-// 1️⃣ TANYA NAMA
-// ===============================
-elseif ($step === "tanya_nama") {
-    reply($from, "Halo ka, boleh disebutkan namanya? 😊", $API_KEY, false);
+//1. Bot tanya nama user diawal percakapan
+if ($step === "tanya_nama") {
+    reply($from, "Halo ka, boleh disebutkan namanya? 😊", $API_KEY);
     $state[$from]["step"] = "dapat_nama";
 }
 
-
-// ===============================
-// 2️⃣ SIMPAN NAMA → MASUK MENU
-// ===============================
+//2. Simpan nama user
 elseif ($step === "dapat_nama") {
 
     $state[$from]["nama"] = ucfirst($text);
 
     reply($from,
-        "Hai *{$state[$from]['nama']}*, selamat datang di Vilaza Kost! ✨\n\n".
+        "Hai *{$state[$from]['nama']}*, selamat datang di Vilaza Kost! \n\n".
         "Ada yang bisa kami bantu ka?",
-        $API_KEY,
-        false
-    );
+        $API_KEY);
 
     $state[$from]["step"] = "menu";
 }
 
-
-
-// 3️⃣ MENU UTAMA – TANPA DUPLIKAT
+// Jawab pertanyaan berdasarkan keyword
 
 elseif ($step === "menu") {
 
-    // 1️⃣ Map angka → keyword internal
+    // Tentukan keyword dari input user
     $map = [
         "1" => "ketersediaan",
         "2" => "harga",
@@ -117,14 +86,14 @@ elseif ($step === "menu") {
     ];
     if (isset($map[$text])) $text = $map[$text];
 
-    // 2️⃣ Keyword natural → internal
+    // Buat variasi keyword
     $keywords = [
         "ketersediaan" => ["kamar", "kosong", "available", "ready"],
-        "harga"       => ["harga"],
+        "harga"       => ["harga","biaya"],
         "fasilitas"   => ["fasilitas"],
         "lokasi"      => ["lokasi", "alamat"],
         "foto"        => ["foto", "gambar"],
-        "reservasi"   => ["reservasi", "booking", "pesan", "daftar", "sewa"]
+        "reservasi"   => ["reservasi", "booking", "sewa"]
     ];
 
     foreach ($keywords as $key => $arr) {
@@ -136,9 +105,7 @@ elseif ($step === "menu") {
         }
     }
 
-    // ===============================
-    // SWITCH UTAMA (1 logika / fitur)
-    // ===============================
+    //Jawab pertanyaan berdasarkan keyword
     switch ($text) {
 
         case "ketersediaan":
@@ -153,15 +120,13 @@ elseif ($step === "menu") {
             reply($from,
                 "*Fasilitas Vilaza Kost:*\n".
                 "• Kamar AC\n• Free Wifi\n• Kamar mandi dalam\n• Kasur & Dipan\n• Meja & Kursi\n• Lemari\n• Smart TV",
-                $API_KEY
-            );
+                $API_KEY);
             break;
 
         case "lokasi":
             reply($from,
                 "Ini lokasi Vilaza Kost kak:\nhttps://maps.app.goo.gl/8kVPN1ciGkFr6C5K9",
-                $API_KEY
-            );
+                $API_KEY);
             break;
 
         case "foto":
@@ -169,8 +134,7 @@ elseif ($step === "menu") {
 
             reply($from,
                 "Berikut foto kamar ya kak 😊\n\n🖼️ $FOTO\n\n(Klik untuk melihat gambarnya)",
-                $API_KEY
-            );
+                $API_KEY);
             break;
 
         case "reservasi":
@@ -178,23 +142,18 @@ elseif ($step === "menu") {
                 "Untuk reservasi silahkan isi data berikut ya kak 😊\n\n".
                 "🔗 https://forms.gle/a7ppvMU1cxn1dmfZ8\n\n".
                 "Jika datanya sudah diisi, kami akan segera menghubungi kembali 🙏",
-                $API_KEY
-            );
+                $API_KEY);
             break;
 
         default:
             reply($from,
-                "Maaf ka, aku belum paham maksudnya 😅\n\nMungkin bisa dipilih informasi berikut:\n$MENU\n\nKetik aja nomornya ya ka",
-                $API_KEY,
-                false
-            );
+                "Maaf ka, aku belum paham maksudnya 😅\n\nMungkin bisa dipilih informasi berikut:\n$MENU\n\nBisa ketik aja nomornya ya ka",
+                $API_KEY);
     }
 }
 
 
-// ===============================
-// SIMPAN STATE
-// ===============================
+//Simpan histori dan step user di file JSON
 file_put_contents($state_file, json_encode($state, JSON_PRETTY_PRINT));
 
 echo "OK";
